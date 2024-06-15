@@ -9,8 +9,8 @@ CREATE TABLE tasks
 (
     task_id           SERIAL PRIMARY KEY,
     user_id           BIGINT REFERENCES users (user_id),
-    first_photo_path  TEXT,
-    second_photo_path TEXT,
-    result_photo_path TEXT,
+    first_source_photo_path  TEXT,
+    second_file_path TEXT,
+    result_file_path TEXT,
     status            TEXT DEFAULT 'pending'
 );
