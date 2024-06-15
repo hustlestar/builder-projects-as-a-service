@@ -8,7 +8,7 @@ logger = configure_logger(__name__)
 async def complete_task(db_pool, user_id, first_photo_path, second_photo_path):
     async with db_pool.acquire() as conn:
         await conn.execute(
-            'UPDATE tasks SET status = $1 WHERE user_id = $2 AND first_photo_path = $3 AND second_photo_path = $4',
+            'UPDATE tasks SET status = $1 WHERE user_id = $2 AND first_source_photo_path = $3 AND second_target_file_path = $4',
             'completed', user_id, first_photo_path, second_photo_path
         )
 
@@ -17,7 +17,7 @@ async def fail_task(db_pool, e, first_photo_path, second_photo_path, user_id):
     logger.error(f"Error processing task for user {user_id}: {e}")
     async with db_pool.acquire() as conn:
         await conn.execute(
-            'UPDATE tasks SET status = $1 WHERE user_id = $2 AND first_photo_path = $3 AND second_photo_path = $4',
+            'UPDATE tasks SET status = $1 WHERE user_id = $2 AND first_source_photo_path = $3 AND second_target_file_path = $4',
             'failed', user_id, first_photo_path, second_photo_path
         )
 

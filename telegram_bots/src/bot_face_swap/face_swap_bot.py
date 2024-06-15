@@ -9,7 +9,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, Conversation
 from db import block_unsubscribed, complete_task, fail_task
 from utils import error_handler, configure_logger, run_subprocess
 
-dotenv = dotenv_values(os.path.join("..", ".face_swap.env"))
+dotenv = dotenv_values(os.path.join("..", "..", ".face_swap.env"))
 USER_DIR = dotenv.get('USER_DIR')
 logger = configure_logger(__name__)
 
@@ -63,7 +63,7 @@ async def handle_1st_source_photo(update: Update, context: ContextTypes.DEFAULT_
         # For compressed photo
         photo_file = await update.message.photo[-1].get_file()
         first_source_photo_path = os.path.join(user_dir, f"{update.message.photo[-1].file_unique_id}.jpg")
-    elif await is_image_doc(update):
+    elif is_image_doc(update):
         # For uncompressed photo
         photo_file = await update.message.document.get_file()
         first_source_photo_path = os.path.join(user_dir, f"{update.message.document.file_unique_id}.jpg")
@@ -82,12 +82,18 @@ async def handle_1st_source_photo(update: Update, context: ContextTypes.DEFAULT_
 async def handle_target_2nd_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.message.from_user.id
     user_dir = os.path.join(USER_DIR, str(update.message.chat_id))
-    if update.message.photo or is_image_doc(update):
+    if update.message.photo:
         target_file = await update.message.photo[-1].get_file()
         second_target_file_path = os.path.join(user_dir, f"{update.message.photo[-1].file_unique_id}.jpg")
-    elif update.message.document and (await is_video_doc(update) or is_video(update)):
+    elif is_image_doc(update):
+        target_file = await update.message.document.get_file()
+        second_target_file_path = os.path.join(user_dir, f"{update.message.document.file_unique_id}.jpg")
+    elif update.message.document and is_video_doc(update):
         target_file = await update.message.document.get_file()
         second_target_file_path = os.path.join(user_dir, f"{update.message.document.file_unique_id}.mp4")
+    elif is_video(update):
+        target_file = await update.message.video.get_file()
+        second_target_file_path = os.path.join(user_dir, f"{update.message.video.file_unique_id}.mp4")
     else:
         await update.message.reply_text("Received unknown file from you. Please provide correct data")
         return ConversationHandler.END
@@ -109,7 +115,7 @@ async def handle_target_2nd_file(update: Update, context: ContextTypes.DEFAULT_T
         await conn.execute('UPDATE users SET usage_count = usage_count + 1 WHERE user_id = $1', user_id)
 
     await update.message.reply_text("Processing your result...\nThis may take a while")
-    await task_queue.put((user_id, context.user_data['first_source_photo'], context.user_data['second_target_file'], result_file_path, update))
+    await task_queue.put((user_id, context.user_data['first_source_photo'], context.user_data['second_target_file'], result_file_path))
     return ConversationHandler.END
 
 
@@ -117,32 +123,33 @@ def is_video(update):
     return bool(update.message.video)
 
 
-async def is_video_or_image_doc(update):
-    return await is_video_doc(update) or await is_image_doc(update)
+def is_video_or_image_doc(update):
+    return is_video_doc(update) or is_image_doc(update)
 
 
-async def is_image_doc(update):
+def is_image_doc(update):
     return update.message.document and update.message.document.mime_type.startswith('image/')
 
 
-async def is_video_doc(update):
+def is_video_doc(update):
     return update.message.document and update.message.document.mime_type.startswith('video/')
 
 
-async def process_queue():
+async def process_queue(app):
     while True:
-        user_id, first_source_photo_path, second_target_file_path, result_file_path, update = await task_queue.get()
+        user_id, first_source_photo_path, second_target_file_path, result_file_path = await task_queue.get()
         logger.info(f"Processing task for user {user_id}")
         try:
             stdout = await perform_face_swap(first_source_photo_path, second_target_file_path, result_file_path)
             if 'No face in source path detected.' in stdout:
                 raise Exception('No face in the 1st photo detected.')
             await complete_task(db_pool, user_id, first_source_photo_path, second_target_file_path)
-            await update.message.reply_photo(photo=open(result_file_path, "rb"))
-            await update.message.reply_text("Here's your result! /start to try again.")
+            await app.bot.send_photo(chat_id=user_id, photo=open(result_file_path, "rb"))
+            await app.bot.send_message(chat_id=user_id, text="Here's your result! /start to try again.")
+            logger.info(f"Task completed for user {user_id}")
         except Exception as e:
             await fail_task(db_pool, e, first_source_photo_path, second_target_file_path, user_id)
-            await update.message.reply_text(f"Error: {e}\n/start to try again.")
+            await app.bot.send_message(chat_id=user_id, text=f"Error: {e}\n/start to try again.")
         task_queue.task_done()
 
 
@@ -171,7 +178,7 @@ def prepare_application():
         entry_points=[CommandHandler("start", start)],
         states={
             FIRST_PHOTO: [MessageHandler(filters.PHOTO | filters.Document.IMAGE, handle_1st_source_photo)],
-            SECOND_PHOTO: [MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.VIDEO, handle_target_2nd_file)],
+            SECOND_PHOTO: [MessageHandler(filters.PHOTO | filters.Document.IMAGE | filters.VIDEO | filters.Document.VIDEO, handle_target_2nd_file)],
         },
         fallbacks=[CommandHandler("start", start)],
     )
@@ -186,7 +193,7 @@ async def async_main():
     async with application:
         await application.initialize()
         await application.start()
-        await async_init()
+        await async_init(application)
         # await application.updater.start_polling(drop_pending_updates=False, allowed_updates=Update.ALL_TYPES)
         _ = await application.updater.start_polling(drop_pending_updates=False, allowed_updates=Update.ALL_TYPES)
         logger.info(f"Bot is started.")
@@ -197,13 +204,13 @@ async def async_main():
         await application.shutdown()
 
 
-async def async_init():
+async def async_init(app):
     global db_pool, task_queue
     await init_db(dotenv)
     task_queue = asyncio.Queue()
     # Load pending tasks from database
     await load_pending_tasks(task_queue)
-    asyncio.create_task(process_queue())
+    asyncio.create_task(process_queue(app))
 
 
 if __name__ == "__main__":
