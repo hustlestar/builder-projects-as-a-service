@@ -120,9 +120,11 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-telegram_bot/*.env
+telegram_bots/*.env
+*/*.env
 telegram_bot\src\user_data
 telegram_bots/src/user_data
+telegram_bots/src/bot_face_swap/user_data
 .venv
 env/
 venv/

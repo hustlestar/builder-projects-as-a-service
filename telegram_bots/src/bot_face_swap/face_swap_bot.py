@@ -9,7 +9,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, Conversation
 from db import complete_task, fail_task, block_unsubscribed
 from utils import run_subprocess, error_handler, configure_logger
 
-dotenv = dotenv_values(os.path.join("..", ".face_swap.env"))
+dotenv = dotenv_values(os.path.join("..", "..", ".face_swap.env"))
 USER_DIR = dotenv.get('USER_DIR')
 logger = configure_logger(__name__)
 
