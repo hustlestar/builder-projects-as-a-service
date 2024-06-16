@@ -64,3 +64,31 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     await context.bot.send_message(
         chat_id='66395090', text=message, parse_mode=ParseMode.HTML
     )
+
+
+async def get_video_duration(file_path):
+    from moviepy.editor import VideoFileClip
+    clip = VideoFileClip(file_path)
+    duration = clip.duration
+    clip.close()
+    return duration
+
+
+def is_image(update):
+    return bool(update.message.photo)
+
+
+def is_video(update):
+    return bool(update.message.video)
+
+
+def is_video_or_image_doc(update):
+    return is_video_doc(update) or is_image_doc(update)
+
+
+def is_image_doc(update):
+    return update.message.document and update.message.document.mime_type.startswith('image/')
+
+
+def is_video_doc(update):
+    return update.message.document and update.message.document.mime_type.startswith('video/')
