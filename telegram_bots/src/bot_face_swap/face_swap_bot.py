@@ -36,7 +36,7 @@ async def load_pending_tasks(queue):
     async with db_pool.acquire() as conn:
         rows = await get_pending_tasks(conn)
         for row in rows:
-            task = (row['user_id'], row['first_source_photo_path'], row['second_target_file_path'], row['result_file_path'])
+            task = (row['task_id'], row['user_id'], row['first_source_photo_path'], row['second_target_file_path'], row['result_file_path'])
             await queue.put(task)
             logger.info(f"Loaded task for user {row['user_id']}")
     logger.info(f"All pending tasks were loaded. {queue.qsize()} tasks in queue")
@@ -131,12 +131,12 @@ async def handle_target_2nd_file(update: Update, context: ContextTypes.DEFAULT_T
             return ConversationHandler.END
 
         result_file_path = os.path.join(user_dir, f'result_{usage_count + 1}.jpg')
-        await create_new_task(conn, context, result_file_path, user_id)
+        task_id = await create_new_task(conn, context, result_file_path, user_id)
 
         await conn.execute('UPDATE users SET usage_count = usage_count + 1 WHERE user_id = $1', user_id)
 
     await update.message.reply_text("Processing your result...\nThis may take a while")
-    await task_queue.put((user_id, context.user_data['first_source_photo'], context.user_data['second_target_file'], result_file_path))
+    await task_queue.put((task_id, user_id, context.user_data['first_source_photo'], context.user_data['second_target_file'], result_file_path))
     return ConversationHandler.END
 
 
@@ -155,6 +155,7 @@ async def process_queue(app):
                 await app.bot.send_message(chat_id=user_id, text="Here's your result! /start to try again.")
                 logger.info(f"Task completed for user {user_id}")
             except Exception as e:
+                logger.info(f"Task failed for user {user_id}: {e}")
                 await fail_task(conn, e, task_id)
                 await app.bot.send_message(chat_id=user_id, text=f"Error: {e}\nRun /start to try again.")
             task_queue.task_done()

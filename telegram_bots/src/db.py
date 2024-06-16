@@ -6,19 +6,14 @@ from utils import configure_logger
 logger = configure_logger(__name__)
 
 
-async def complete_task(db_pool, task_id):
-    async with db_pool.acquire() as conn:
-        await conn.execute('UPDATE tasks SET status = $1, finished_at = $2 WHERE task_id = $3',
-                           'completed', datetime.now(), task_id)
+async def complete_task(conn, task_id):
+    await conn.execute('UPDATE tasks SET status = $1, processing_finished_at = $2 WHERE task_id = $3',
+                       'completed', datetime.now(), task_id)
 
 
-async def fail_task(db_pool, e, first_photo_path, second_photo_path, user_id):
-    logger.error(f"Error processing task for user {user_id}: {e}")
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            'UPDATE tasks SET status = $1 WHERE user_id = $2 AND first_source_photo_path = $3 AND second_target_file_path = $4',
-            'failed', user_id, first_photo_path, second_photo_path
-        )
+async def fail_task(conn, e, task_id):
+    await conn.execute('UPDATE tasks SET status = $1, error_message = $2, processing_finished_at = $3 WHERE task_id = $4',
+                       'failed', str(e), datetime.now(), task_id)
 
 
 async def block_unsubscribed(update, conn, user_id) -> Tuple[bool, int]:
@@ -35,7 +30,7 @@ async def create_new_user(conn, update, user_id):
 
 
 async def get_pending_tasks(conn):
-    return await conn.fetch('SELECT user_id, first_source_photo_path, second_target_file_path, result_file_path FROM tasks WHERE status = $1',
+    return await conn.fetch('SELECT task_id, user_id, first_source_photo_path, second_target_file_path, result_file_path FROM tasks WHERE status = $1',
                             'pending')
 
 
