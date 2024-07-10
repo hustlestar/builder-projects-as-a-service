@@ -164,3 +164,5 @@ cython_debug/
 .idea/
 *.iml
 venv/
+social_media_helper_venv/
+social_media_helper/src/.env
