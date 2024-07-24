@@ -48,7 +48,18 @@ def generate_blog_post(transcript):
                 },
                 {
                     "role": "user",
-                    "content": f"Create a concise, well-structured, engaging post up to 120 words in English language based on the following video transcript:\n{transcript}"
+                    "content": f"Create post with following properties: "
+                               f"no water, "
+                               f"only important information, "
+                               f"well-structured, "
+                               f"use facts,"
+                               f"provide all meaningful numbers, "
+                               f"engaging, "
+                               f"separate ideas, "
+                               f"use numbered lists if necessary, "
+                               f"less than 1000 characters, "
+                               f"English language, "
+                               f"based on the following video transcript:\n{transcript}"
                 }
             ],
             model="gpt-4-turbo",
