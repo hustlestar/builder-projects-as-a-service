@@ -1,0 +1,5 @@
+youtube_transcript_api
+openai
+requests
+python-dotenv
+click
